@@ -4,8 +4,16 @@ import os
 from flask import request
 from flask import Flask
 import json
+from flask.ext.redis import Redis
+
+
 
 app = Flask(__name__)
+
+app.config['REDIS_HOST'] = 'redis'
+app.config['REDIS_PORT'] = 6379
+app.config['REDIS_DB'] = 0
+redis1 = Redis(app)
 
 def get_environment():
     ret = OrderedDict()
@@ -37,14 +45,32 @@ def dict_to_html_ul(dd, level=0):
     text += '</ul>'
     return text
 
+def redis_connected(redis):
+    try:
+        return redis.ping()
+    except:
+        return False
 
 hostname = socket.gethostname()
 environment = dict_to_html_ul(get_environment())
 
 
+@app.route('/count')
+def incr_redis():
+    if redis_connected(redis1):
+        res = redis1.incr("cdebug-testkey")
+        return "Counter increased by host {} to {}".format(hostname, res)
+    else:
+        return "Not connected to redis"
+
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def catch_all(path):
+    counter = 0
+    if redis_connected(redis1):
+        counter = redis1.get("cdebug-testkey").decode("utf-8")
+
     output = TEMPLATE.format(hostname=hostname,
                              environment=environment,
                              path=request.path,
@@ -53,7 +79,9 @@ def catch_all(path):
                              cookies=dict_to_html_ul(get_cookies()),
                              method=request.method,
                              url=request.url,
-                             remote_addr=request.remote_addr)
+                             remote_addr=request.remote_addr,
+                             redis_connected=redis_connected(redis1),
+                             counter=counter)
     return output
 
 
@@ -79,6 +107,13 @@ TEMPLATE = """
 
 <h3>Cookies</h3>
 {cookies}
+<h3>Redis connected?</h3>
+{redis_connected}
+
+<p>Redis connections are established to the hostname "redis" on port 6379.</p>
+
+<h3>Redis counter</h3>
+{counter}
 </body>
 </html>
 """
