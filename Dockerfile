@@ -1,6 +1,6 @@
 FROM python:3-alpine
 
-RUN pip install flask gunicorn
+RUN pip install flask gunicorn  Flask-And-Redis
 
 COPY app.py /app.py
 
